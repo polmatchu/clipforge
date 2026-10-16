@@ -8,7 +8,7 @@ if %errorlevel% equ 0 (
   set "PY=python"
 )
 echo Installing/updating the free YouTube import helper...
-%PY% -m pip install --upgrade "yt-dlp[default]"
+%PY% -m pip install --upgrade "yt-dlp[default]" imageio-ffmpeg
 if errorlevel 1 (
   echo Could not install yt-dlp. Please install Python 3.10+ first.
   pause
