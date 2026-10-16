@@ -111,17 +111,10 @@ class Store:
             directory = self.root / job_id
             directory.mkdir(parents=True, exist_ok=True)
             ffmpeg = shutil.which("ffmpeg") is not None
-            # YouTube offers different formats for different videos/clients.
-            # Don't require AVC1/M4A or a progressive MP4 to exist: fall back
-            # to the formats actually available for this video.
-            # FFmpeg can merge separate video/audio and convert when needed.
-            fmt = (
-                "bv[height<=1080][ext=mp4]+ba[ext=m4a]/"
-                "b[height<=1080][ext=mp4]/"
-                "bv[height<=1080]+ba/"
-                "bv+ba/b"
-                if ffmpeg else "b[ext=mp4]/b"
-            )
+            # Prefer the best actual video stream (any codec/resolution),
+            # adding audio if necessary. The MP4 conversion happens afterwards.
+            # Without FFmpeg, use a single combined audio+video stream.
+            fmt = "bv*+ba/b" if ffmpeg else "b"
 
             def progress_hook(info):
                 if info.get("status") == "downloading":
@@ -149,8 +142,47 @@ class Store:
                 "socket_timeout": 25,
                 "windowsfilenames": True,
             }
-            with yt_dlp.YoutubeDL(options) as ydl:
-                info = ydl.extract_info(f"https://www.youtube.com/watch?v={identifier}", download=True)
+            video_url = f"https://www.youtube.com/watch?v={identifier}"
+            try:
+                with yt_dlp.YoutubeDL(options) as ydl:
+                    info = ydl.extract_info(video_url, download=True)
+            except yt_dlp.utils.DownloadError as exc:
+                if "Requested format is not available" not in str(exc):
+                    raise
+                # Diagnose without choosing/downloading a format. A missing
+                # stream is different from our own format expression failing.
+                probe = dict(options)
+                probe.update({
+                    "format": None,
+                    "skip_download": True,
+                    "ignore_no_formats_error": True,
+                    "progress_hooks": [],
+                })
+                try:
+                    with yt_dlp.YoutubeDL(probe) as ydl:
+                        metadata = ydl.extract_info(video_url, download=False)
+                    formats = (metadata or {}).get("formats") or []
+                    playable = [
+                        item for item in formats
+                        if item.get("vcodec") not in (None, "none")
+                        and item.get("protocol") != "mhtml"
+                    ]
+                except Exception:
+                    playable = []
+                if playable:
+                    samples = ", ".join(
+                        str(item.get("format_id") or "?") for item in playable[-6:]
+                    )
+                    raise RuntimeError(
+                        f"YouTube provided {len(playable)} video format(s), but download "
+                        f"selection failed (format IDs: {samples}). Please send the "
+                        "output of: py -3 -m yt_dlp -v -F <YouTube URL>"
+                    ) from exc
+                raise RuntimeError(
+                    "YouTube returned no usable video streams to yt-dlp for this URL. "
+                    "This can be a YouTube access/challenge restriction rather than an MP4 "
+                    "setting. Please run: py -3 -m yt_dlp -v -F <YouTube URL>"
+                ) from exc
             mp4s = list(directory.glob("*.mp4"))
             if not mp4s:
                 raise RuntimeError("No MP4 was produced. Install FFmpeg (and ensure it's on PATH), then retry.")
