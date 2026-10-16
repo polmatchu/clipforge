@@ -85,12 +85,16 @@ class Store:
             directory = self.root / job_id
             directory.mkdir(parents=True, exist_ok=True)
             ffmpeg = shutil.which("ffmpeg") is not None
-            # With FFmpeg, prefer 1080p H.264 + AAC audio; without it choose a
-            # combined MP4 so the user can start without a second dependency.
+            # YouTube offers different formats for different videos/clients.
+            # Don't require AVC1/M4A or a progressive MP4 to exist: fall back
+            # to the formats actually available for this video.
+            # FFmpeg can merge separate video/audio and convert when needed.
             fmt = (
-                "bv*[vcodec^=avc1][height<=1080]+ba[ext=m4a]/"
-                "best[ext=mp4][acodec!=none][vcodec!=none]"
-                if ffmpeg else "best[ext=mp4][acodec!=none][vcodec!=none]"
+                "bv[height<=1080][ext=mp4]+ba[ext=m4a]/"
+                "b[height<=1080][ext=mp4]/"
+                "bv[height<=1080]+ba/"
+                "bv+ba/b"
+                if ffmpeg else "b[ext=mp4]/b"
             )
 
             def progress_hook(info):
@@ -107,6 +111,7 @@ class Store:
                 "format": fmt,
                 "outtmpl": str(directory / "source.%(ext)s"),
                 "merge_output_format": "mp4",
+                **({"recodevideo": "mp4"} if ffmpeg else {}),
                 "noplaylist": True,
                 "quiet": True,
                 "no_warnings": True,
@@ -121,7 +126,7 @@ class Store:
                 info = ydl.extract_info(f"https://www.youtube.com/watch?v={identifier}", download=True)
             mp4s = list(directory.glob("*.mp4"))
             if not mp4s:
-                raise RuntimeError("No browser-compatible MP4 was produced. Install FFmpeg, then retry.")
+                raise RuntimeError("No MP4 was produced. Install FFmpeg (and ensure it's on PATH), then retry.")
             result = max(mp4s, key=lambda p: p.stat().st_size)
             if result.stat().st_size > MAX_BYTES:
                 raise RuntimeError("This video is larger than the 1.5 GB local import limit.")
