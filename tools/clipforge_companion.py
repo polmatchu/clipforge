@@ -48,6 +48,26 @@ def youtube_id(value: str) -> str | None:
         return None
 
 
+def find_ffmpeg(root: Path) -> str | None:
+    """Use FFmpeg on PATH or the free executable bundled with imageio-ffmpeg."""
+    executable = shutil.which("ffmpeg")
+    if executable:
+        return str(Path(executable).parent)
+    try:
+        import imageio_ffmpeg
+        bundled = Path(imageio_ffmpeg.get_ffmpeg_exe())
+        target_dir = root / "ffmpeg-bin"
+        target = target_dir / ("ffmpeg.exe" if __import__("os").name == "nt" else "ffmpeg")
+        if not target.is_file():
+            target_dir.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(bundled, target)
+            if __import__("os").name != "nt":
+                target.chmod(0o755)
+        return str(target_dir)
+    except (ImportError, OSError, RuntimeError):
+        return None
+
+
 class Store:
     def __init__(self, root: Path):
         self.root = root
@@ -110,7 +130,8 @@ class Store:
                 ) from exc
             directory = self.root / job_id
             directory.mkdir(parents=True, exist_ok=True)
-            ffmpeg = shutil.which("ffmpeg") is not None
+            ffmpeg_location = find_ffmpeg(self.root)
+            ffmpeg = ffmpeg_location is not None
             # Prefer the best actual video stream (any codec/resolution),
             # adding audio if necessary. The MP4 conversion happens afterwards.
             # Without FFmpeg, use a single combined audio+video stream.
@@ -131,6 +152,7 @@ class Store:
                 **({"js_runtimes": {"node": {}}} if runtime == "node" else {}),
                 "outtmpl": str(directory / "source.%(ext)s"),
                 "merge_output_format": "mp4",
+                **({"ffmpeg_location": ffmpeg_location} if ffmpeg else {}),
                 **({"recodevideo": "mp4"} if ffmpeg else {}),
                 "noplaylist": True,
                 "quiet": True,
