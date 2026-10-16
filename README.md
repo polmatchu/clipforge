@@ -8,7 +8,7 @@ A new, independent, MIT-licensed app inspired by short-form clipping workflows. 
 
 | Tool | Status | Notes |
 | --- | --- | --- |
-| YouTube links | **Preview/reference** | Paste regular, Shorts or youtu.be links. Bring the original video file separately (see legal note). |
+| YouTube links | **Automatic local import (new)** | Paste a URL and click Import. Requires running the free local Python companion; it retrieves and prepares an MP4 automatically. No manual source-video download or upload. |
 | Local video upload | **Implemented** | Uses browser `File` APIs, not a remote server. |
 | Automatic smart clip candidates | **Implemented, heuristic** | Samples visual scene activity; if a transcript is available, also scores speech density, hooks and emphatic language. Not an AI model that understands all visuals. |
 | Sequential parts | **Implemented** | Cut from start to finish into adjacent segments (up to 80 in the UI). |
@@ -23,6 +23,36 @@ A new, independent, MIT-licensed app inspired by short-form clipping workflows. 
 | Direct TikTok / Instagram posting | **Not implemented** | Requires provider approvals, OAuth and (for some flows) a secure backend. Official upload buttons are provided. |
 | Auto-post while site closed | **Not implemented** | Requires a remote scheduler and credential/storage strategy, or locally running software. |
 | Licensed sound effects / music | **None added** | Only original audio, which **still may be copyrighted**. |
+
+## YouTube link import without manual downloads
+
+**Your website stays on free GitHub Pages**, but GitHub Pages cannot run a downloader. A **one-time free local companion** running on your PC makes the paste-a-link feature work end to end. The video is automatically fetched and delivered into the editor; you do **not** need to download the video yourself or select an MP4 manually.
+
+### Windows (easiest)
+
+1. Install **Python 3.10+** from [python.org](https://www.python.org/downloads/) if it is not already installed; select **Add Python to PATH** during setup.
+2. Download the [ClipForge repository ZIP](https://github.com/polmatchu/clipforge/archive/refs/heads/main.zip) **once**, and extract it on your PC. This is the app's helper code, **not a YouTube video**.
+3. Double-click **`start_companion.bat`** in the extracted folder. The first launch automatically installs/updates the free `yt-dlp` tool. Leave this terminal window open.
+4. Open **<https://polmatchu.github.io/clipforge/>**, paste a YouTube video link and click the **arrow**. ClipForge fetches the video automatically and shows it in the editor.
+
+For higher-quality video+audio merging, optionally install [FFmpeg](https://ffmpeg.org/download.html) on your PATH. Without FFmpeg, the helper chooses a compatible combined MP4 stream where available, which may have lower resolution.
+
+### macOS / Linux
+
+Run in a terminal from the extracted repo folder:
+
+```sh
+python3 -m pip install -U yt-dlp
+python3 tools/clipforge_companion.py
+```
+
+On systems that restrict global Python packages, use a virtual environment first (or a package manager such as `pipx`). The optional `start_companion.sh` provides the equivalent two commands if user-level pip installs are permitted.
+
+**How it works:** The companion listens **only** on `127.0.0.1:8765`, accepts requests only from `https://polmatchu.github.io` and the local Vite development server, validates YouTube URLs and does not expose your filesystem. It creates a temporary local MP4 that the app automatically loads into your browser; downloaded temporary videos are removed when the companion exits. For a fork hosted on a different GitHub Pages account, launch with `--origin https://YOUR-USERNAME.github.io`. Keep the helper window open when importing.
+
+**Limitations:** GitHub Pages by itself still cannot do URL-to-video processing. Both the website and companion must be available while importing. This method does not bypass YouTube availability, copyright protections, DRM, account login restrictions, age restrictions, or rate limits. Some videos may require permission or may not offer browser-compatible formats. Import only videos you own or have permission to download and repurpose, and comply with platform terms. The client sends the selected YouTube link only to your own local companion and that helper contacts YouTube directly. Your video is not uploaded to a third-party ClipForge server. Modern browsers may ask for permission to connect to a local service; approve it for the ClipForge website if prompted.
+
+If the page shows **Import needs attention**, start the companion, ensure Windows Firewall or antivirus is not blocking Python's local loopback connection, and retry. The helper requires an internet connection to access YouTube. If you use another computer, start the companion **on the same computer as your browser**.
 
 ## Run locally
 
@@ -48,12 +78,12 @@ npm run preview
 4. Your site will appear at `https://YOUR-USERNAME.github.io/YOUR-REPOSITORY/`. No custom domain is necessary.
 5. If the deployment fails, check the **Actions** tab for the specific error. Rebuilds require access to the npm registry. Runtime model downloads also require internet access on the first use.
 
-GitHub Pages offers static web hosting, **not background jobs, hidden secrets, persistent compute, server-side OAuth token exchange or video storage**. GitHub publishes usage limits: <https://docs.github.com/en/pages/getting-started-with-github-pages/github-pages-limits>.
+GitHub Pages offers static web hosting, **not background jobs, hidden secrets, persistent compute, server-side OAuth token exchange or video storage**. Pasted YouTube URLs use the optional companion described above, running on your computer. GitHub publishes usage limits: <https://docs.github.com/en/pages/getting-started-with-github-pages/github-pages-limits>.
 
 ## Recommended workflow
 
-1. **Own the source or have explicit permission.** Paste a YouTube URL to reference and preview it. In YouTube Studio, download your **own** original if you no longer have the source file; otherwise supply your licensed original file. **You cannot simply paste an arbitrary YouTube link and rip its media inside this browser app.**
-2. Upload the source video into ClipForge (it stays on your machine).
+1. **Own the source or have explicit permission.** Start the free local companion and paste the YouTube link: the helper fetches the source automatically. Or import a local video file as before.
+2. Wait for the video to appear in the ClipForge editor. It stays on your device (the helper makes a temporary source file that is cleaned up when stopped).
 3. For talking-head footage: run **Transcribe with Whisper**, or import an SRT/VTT with timestamps. The exact speech recognition and timings can be wrong; review carefully.
 4. Set `Smart highlights` or `Split into parts`, adjust clip length and desired quantity, and run generation.
 5. In **My clips**, inspect each candidate, play and edit start/end timestamps, refine titles and descriptions, and optionally use on-device Qwen to rewrite copy.
@@ -79,7 +109,7 @@ This uses Python 3.10+ standard library (no paid service), native `ffmpeg`, and 
 - Optional small Qwen text generation model (`onnx-community/Qwen2.5-0.5B-Instruct`) from Hugging Face. It can download hundreds of MB, and may not fit low-memory devices. <https://huggingface.co/onnx-community/Qwen2.5-0.5B-Instruct>.
 - Open-licensed **Anton** font fetched at export time from Google Fonts to burn captions; source: <https://github.com/google/fonts/tree/main/ofl/anton>. Font is **not** bundled in the repository.
 
-Except for the referenced public CDN/model/font requests, source video bytes and transcripts are processed on the device. The app currently stores **planner entries and preferences** in browser localStorage, so deleting browser data removes them. Video data is not persisted across reloads.
+Except for the referenced public CDN/model/font requests and optional YouTube retrieval by the local companion, source video bytes and transcripts are processed on the device. The app currently stores **planner entries and preferences** in browser localStorage, so deleting browser data removes them. Video data is not persisted across reloads.
 
 ## Why can't I just link all my accounts?
 
