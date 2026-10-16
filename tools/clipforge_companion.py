@@ -82,6 +82,31 @@ class Store:
                 import yt_dlp
             except ImportError as exc:
                 raise RuntimeError("yt-dlp is missing. Run: python -m pip install -U yt-dlp") from exc
+            # yt-dlp's YouTube extractor requires a supported JS runtime.
+            # Deno is enabled automatically. Without it, require Node 22+.
+            runtime = shutil.which("deno")
+            if not runtime:
+                node = shutil.which("node")
+                if node:
+                    import subprocess
+                    try:
+                        version = subprocess.check_output([node, "--version"], text=True, timeout=5).strip()
+                        major = int(version.lstrip("v").split(".")[0])
+                        if major >= 22:
+                            runtime = "node"
+                    except (ValueError, OSError, subprocess.SubprocessError):
+                        pass
+            if not runtime:
+                raise RuntimeError(
+                    "YouTube import needs Deno 2.3+ (recommended) or Node 22+. "
+                    "Install Deno from https://deno.com and restart start_companion.bat."
+                )
+            try:
+                import yt_dlp_ejs  # noqa: F401
+            except ImportError as exc:
+                raise RuntimeError(
+                    'The yt-dlp EJS solver is missing. Run: python -m pip install -U "yt-dlp[default]"'
+                ) from exc
             directory = self.root / job_id
             directory.mkdir(parents=True, exist_ok=True)
             ffmpeg = shutil.which("ffmpeg") is not None
@@ -109,12 +134,13 @@ class Store:
             self.update(job_id, status="connecting", progress=0.01)
             options = {
                 "format": fmt,
+                **({"js_runtimes": {"node": {}}} if runtime == "node" else {}),
                 "outtmpl": str(directory / "source.%(ext)s"),
                 "merge_output_format": "mp4",
                 **({"recodevideo": "mp4"} if ffmpeg else {}),
                 "noplaylist": True,
                 "quiet": True,
-                "no_warnings": True,
+                "no_warnings": False,
                 "max_filesize": MAX_BYTES,
                 "progress_hooks": [progress_hook],
                 "retries": 3,
