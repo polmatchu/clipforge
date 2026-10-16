@@ -101,9 +101,10 @@ class Store:
                     "YouTube import needs Deno 2.3+ (recommended) or Node 22+. "
                     "Install Deno from https://deno.com and restart start_companion.bat."
                 )
+            from importlib.metadata import PackageNotFoundError, version
             try:
-                import yt_dlp_ejs  # noqa: F401
-            except ImportError as exc:
+                version("yt-dlp-ejs")
+            except PackageNotFoundError as exc:
                 raise RuntimeError(
                     'The yt-dlp EJS solver is missing. Run: python -m pip install -U "yt-dlp[default]"'
                 ) from exc
