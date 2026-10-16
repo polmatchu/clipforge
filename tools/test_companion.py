@@ -49,13 +49,15 @@ class ImportTests(unittest.TestCase):
                 assert download
         with tempfile.TemporaryDirectory() as td:
             store = Store(Path(td))
-            with patch.dict('sys.modules', {'yt_dlp':types.SimpleNamespace(YoutubeDL=FakeYDL)}):
+            with (patch.dict('sys.modules', {'yt_dlp':types.SimpleNamespace(YoutubeDL=FakeYDL)}),
+                  patch('clipforge_companion.shutil.which', side_effect=lambda name: '/usr/bin/' + name),
+                  patch('importlib.metadata.version', return_value='0.8.0')):
                 job_id = store.start('dQw4w9WgXcQ')
                 self.assertIsNotNone(job_id)
                 for _ in range(100):
                     if store.read(job_id)['status'] in ('ready', 'error'): break
                     time.sleep(0.01)
-                self.assertEqual(store.read(job_id)['status'], 'ready')
+                self.assertEqual(store.read(job_id)['status'], 'ready', store.read(job_id)['error'])
                 self.assertEqual(store.read(job_id)['size'], len(b'fake mp4 bytes'))
 
     def test_cors_rejects_untrusted_websites(self):
